@@ -1,4 +1,4 @@
-package com.display.io;
+package io.display.com.utillib;
 
 import android.os.Environment;
 
@@ -49,8 +49,6 @@ public final class FileLoader {
         }
         System.out.println("info:"+url+" download success");
     }
-
-
 
     /**
      * read InputStream
