@@ -2,9 +2,9 @@ package com.display.io;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
@@ -13,13 +13,16 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
-import java.io.IOException;
 
+import io.display.com.utillib.DownloadListener;
 import io.display.com.utillib.FileLoader;
+import io.display.com.utillib.FileInfo;
 
-public class TestActivity extends AppCompatActivity implements View.OnClickListener {
+public class TestActivity extends AppCompatActivity implements View.OnClickListener, DownloadListener {
 
     private static String[] PERMISSIONS_STORAGE = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -30,6 +33,10 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
     private EditText etInput;
     private Button btnDownLoad;
     private TextView tvStatus;
+    private ProgressBar mProgressBar;
+
+    private FileLoader mDownloadTask;
+    private String mDstPath = Environment.getExternalStorageDirectory().getPath() + "/MyDownLoad/";
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -38,6 +45,7 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
         etInput = findViewById(R.id.et_input);
         btnDownLoad = findViewById(R.id.btn_download);
         tvStatus = findViewById(R.id.tv_status);
+        mProgressBar = findViewById(R.id.progressBar);
 
         btnDownLoad.setOnClickListener(this);
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
@@ -62,36 +70,40 @@ public class TestActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.btn_download:
-                new DownLoad().execute();
+                mDownloadTask = new FileLoader(etInput.getText().toString().trim(), mDstPath, "Display.io_Test.apk", this);
+                mDownloadTask.execute();
                 break;
         }
     }
 
-    class DownLoad extends AsyncTask<String, Integer, String> {
-        @Override
-        protected void onPreExecute() {
-            super.onPreExecute();
-        }
-        @Override
-        protected String doInBackground(String... params) {
-            try {
-                FileLoader.downLoadFromUrl(etInput.getText().toString().trim(), "test.apk");
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return "download success";
-        }
 
-        @Override
-        protected void onProgressUpdate(Integer... values) {
-            super.onProgressUpdate(values);
-        }
+    @Override
+    public void onStart() {
+        super.onStart();
+        tvStatus.setText("Begin Download");
+        mProgressBar.setMax(100);
+        mProgressBar.setProgress(0);
+    }
 
-        @Override
-        protected void onPostExecute(String s) {
-            super.onPostExecute(s);
-            tvStatus.setText(s);
+    @Override
+    public void onProgress(FileInfo fileInfo) {
+        if (fileInfo != null) {
+            mProgressBar.setMax((int) fileInfo.getLength());
+            mProgressBar.setProgress((int) fileInfo.getDownloadLength());
+            String mDownText = fileInfo.getFile().getName() + " download " + fileInfo.getDownloadLength() + "kb," + "Total Length is :" +
+                    fileInfo.getLength() + "kb";
+            tvStatus.setText(mDownText);
         }
     }
 
+    @Override
+    public void onFinish(FileInfo FileInfo) {
+        Toast.makeText(this, "download success", Toast.LENGTH_SHORT).show();
+        tvStatus.setText("download success");
+    }
+
+    @Override
+    public void onCancled() {
+        // cancled
+    }
 }

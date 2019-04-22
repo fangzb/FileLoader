@@ -1,69 +1,108 @@
 package io.display.com.utillib;
 
-import android.os.Environment;
+import android.os.AsyncTask;
+import android.util.Log;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-public final class FileLoader {
+import static android.content.ContentValues.TAG;
+
+public class FileLoader extends AsyncTask<Void, FileInfo, FileInfo> {
 
     private static final int TIMEOUT_INTERVAL = 3 * 1000;
 
-    public FileLoader() {
+    private String mDownloadUrl;
+    private final String mDstPath;
+    private final String mFileName;
+    private final DownloadListener mDownloadListener;
+
+    public FileLoader(String downloadUrl, String dstPath, String fileName, DownloadListener downloadListener) {
+        mDownloadUrl = downloadUrl;
+        mDstPath = dstPath;
+        mFileName = fileName;
+        mDownloadListener = downloadListener;
     }
 
-    /**
-     * receive a URI to a file, download and save the file to a path
-     * @param urlStr
-     * @param fileName
-     * @throws IOException
-     */
-    public static void  downLoadFromUrl(String urlStr,String fileName) throws IOException {
-        URL url = new URL(urlStr);
-        HttpURLConnection conn = (HttpURLConnection)url.openConnection();
-        //timeout
-        conn.setConnectTimeout(TIMEOUT_INTERVAL);
-        //get inputStream
-        InputStream inputStream = conn.getInputStream();
-        //get array
-        byte[] getData = readInputStream(inputStream);
-        //save path
-        String dirName = Environment.getExternalStorageDirectory() + "/MyDownLoad/";
-        File saveDir = new File(dirName);
-        if(!saveDir.exists()){
-            saveDir.mkdir();
-        }
-        File file = new File(saveDir+File.separator+fileName);
-        FileOutputStream fos = new FileOutputStream(file);
-        fos.write(getData);
-        if(fos!=null){
-            fos.close();
-        }
-        if(inputStream!=null){
-            inputStream.close();
-        }
-        System.out.println("info:"+url+" download success");
+    @Override
+    protected void onPreExecute() {
+        super.onPreExecute();
+        mDownloadListener.onStart();
     }
 
-    /**
-     * read InputStream
-     * @param inputStream
-     * @return
-     * @throws IOException
-     */
-    public static  byte[] readInputStream(InputStream inputStream) throws IOException {
-        byte[] buffer = new byte[1024];
-        int len;
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        while((len = inputStream.read(buffer)) != -1) {
-            bos.write(buffer, 0, len);
+    @Override
+    protected FileInfo doInBackground(Void... params) {
+        URL url;
+        FileInfo fileInfo = null;
+        int contentLength;
+        int downloadLength = 0;
+        OutputStream output;
+        InputStream istream;
+        try {
+            url = new URL(mDownloadUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            //timeout
+            connection.setConnectTimeout(TIMEOUT_INTERVAL);
+            contentLength = connection.getContentLength();
+            Log.i(TAG, "doInBackground: contentLength=" + contentLength);
+            //get inputStream
+            istream = connection.getInputStream();
+            File dir = new File(mDstPath);
+            if (!dir.exists()) {
+                dir.mkdir();
+            }
+            //save path
+            File file = new File(mDstPath + mFileName);
+
+            output = new FileOutputStream(file);
+            byte[] buffer = new byte[1024 * 4];
+            int count = 0;
+            int len = -1;
+            while ((len = istream.read(buffer)) != -1) {
+                output.write(buffer, 0, len);
+                downloadLength += len;
+
+                if (count == 10) {
+                    fileInfo = new FileInfo(contentLength, downloadLength, file, file.getPath
+                            (), file.getName());
+                    publishProgress(fileInfo);
+                    count = 0;
+                }
+                count++;
+
+            }
+            fileInfo = new FileInfo(contentLength, downloadLength, file, file.getPath(), file
+                    .getName());
+            publishProgress(fileInfo);
+            output.flush();
+            output.close();
+            istream.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        bos.close();
-        return bos.toByteArray();
+        return fileInfo;
+    }
+
+    @Override
+    protected void onProgressUpdate(FileInfo... values) {
+        super.onProgressUpdate(values);
+        mDownloadListener.onProgress(values[0]);
+    }
+
+    @Override
+    protected void onPostExecute(FileInfo fileInfo) {
+        super.onPostExecute(fileInfo);
+        mDownloadListener.onFinish(fileInfo);
+    }
+
+    @Override
+    protected void onCancelled() {
+        super.onCancelled();
+        mDownloadListener.onCancled();
     }
 }
